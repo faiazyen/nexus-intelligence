@@ -1,0 +1,23 @@
+fastapi>=0.115
+uvicorn[standard]>=0.32
+sqlalchemy[asyncio]>=2.0.36
+asyncpg>=0.30
+alembic>=1.14
+pydantic>=2.9
+pydantic-settings>=2.6
+anthropic>=0.40
+langgraph>=0.2.60
+langchain-core>=0.3
+qdrant-client>=1.12
+redis>=5.2
+celery>=5.4
+httpx>=0.27
+sse-starlette>=2.1
+python-multipart>=0.0.12
+tenacity>=9.0
+
+# dev/test
+pytest>=8.3
+pytest-asyncio>=0.24
+aiosqlite>=0.20
+ruff>=0.8

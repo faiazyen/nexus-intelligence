@@ -1,0 +1,30 @@
+# deps
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# builds
+.next/
+out/
+dist/
+*.tsbuildinfo
+
+# env & secrets
+.env
+.env.local
+.env*.local
+*.pem
+
+# tooling
+.DS_Store
+.pytest_cache/
+.ruff_cache/
+.terraform/
+*.tfstate
+*.tfstate.backup
+coverage/
+.coverage
+playwright-report/
+test-results/
