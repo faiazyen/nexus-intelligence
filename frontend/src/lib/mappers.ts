@@ -11,6 +11,7 @@ import type {
   ActionQueueEntry,
   BrainBriefing,
   ICPProfile,
+  LLMCostSummary,
   OutreachDraft,
   OutreachFrame,
   OutreachVariant,
@@ -221,5 +222,25 @@ export function mapICPToWire(profile: ICPProfile): Raw {
     geographies: profile.geographies,
     tech_stack_keywords: profile.techKeywords,
     offer_description: profile.offerDescription,
+  };
+}
+
+export function mapCostSummary(raw: Raw): LLMCostSummary {
+  const fallbackEvents: Raw[] = Array.isArray(raw.fallback_events) ? raw.fallback_events : [];
+  return {
+    totalUsd: Number(raw.total_usd ?? 0),
+    byModel: raw.by_model && typeof raw.by_model === "object" ? raw.by_model : {},
+    byPurpose: raw.by_purpose && typeof raw.by_purpose === "object" ? raw.by_purpose : {},
+    topModelByPurpose:
+      raw.top_model_by_purpose && typeof raw.top_model_by_purpose === "object"
+        ? raw.top_model_by_purpose
+        : {},
+    fallbackEvents: fallbackEvents.map((e) => ({
+      model: String(e.model ?? ""),
+      purpose: String(e.purpose ?? ""),
+      reason: e.reason ? String(e.reason) : undefined,
+    })),
+    dailyLimitUsd: Number(raw.daily_limit_usd ?? 0.25),
+    overBudget: Boolean(raw.over_budget),
   };
 }

@@ -9,6 +9,7 @@ import type {
   BrainBriefing,
   Contact,
   ICPProfile,
+  LLMCostSummary,
   OutreachDraft,
   PipelineFunnelStage,
   Signal,
@@ -828,6 +829,23 @@ export const demoPlanUsage = {
   seatsUsed: 2,
   seatsLimit: 3,
   renewsOn: "2026-08-01",
+};
+
+export const demoCostSummary: LLMCostSummary = {
+  totalUsd: 0.08,
+  byModel: {
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": 0,
+    "moonshotai/kimi-k2-thinking": 0.08,
+  },
+  byPurpose: { classify: 0, outreach: 0.05, brain: 0.03 },
+  topModelByPurpose: {
+    classify: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    outreach: "moonshotai/kimi-k2-thinking",
+    brain: "moonshotai/kimi-k2-thinking",
+  },
+  fallbackEvents: [],
+  dailyLimitUsd: 0.25,
+  overBudget: false,
 };
 
 export const demoChatQuickPrompts: string[] = [

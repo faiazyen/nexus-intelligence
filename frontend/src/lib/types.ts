@@ -148,6 +148,16 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+export interface LLMCostSummary {
+  totalUsd: number;
+  byModel: Record<string, number>;
+  byPurpose: Record<string, number>;
+  topModelByPurpose: Record<string, string>;
+  fallbackEvents: { model: string; purpose: string; reason?: string }[];
+  dailyLimitUsd: number;
+  overBudget: boolean;
+}
+
 export interface PlanUsage {
   planName: "NEXUS Solo" | "NEXUS Agency" | "NEXUS Enterprise" | "NEXUS AI Install";
   accountsMonitored: number;

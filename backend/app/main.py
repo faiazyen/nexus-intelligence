@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
         "%s starting (env=%s, llm=%s)",
         settings.app_name,
         settings.environment,
-        "live" if settings.anthropic_api_key else "demo mode",
+        "live" if settings.openrouter_api_key else "demo mode",
     )
     yield
     await dispose_engine()

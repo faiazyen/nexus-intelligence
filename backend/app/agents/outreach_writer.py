@@ -1,10 +1,12 @@
 """AGENT 4 — Outreach Writer.
 
 Generates three outreach variants (assertive / analytical / challenger) per
-account using Claude Opus and the verbatim Outreach Writer prompt. A quality
-gate rejects drafts that break the rules (generic openers, >3 sentences,
-banned phrases, no signal reference, em dashes) and regenerates once before
-falling back to a deterministic signal-referencing template.
+account via OpenRouter: a mid-tier reasoning model first (Kimi K2 Thinking),
+escalating to Claude Opus only if the mid-tier draft fails the quality
+gate — see app.core.llm_router. A quality gate rejects drafts that break
+the rules (generic openers, >3 sentences, banned phrases, no signal
+reference, em dashes) before falling back to a deterministic
+signal-referencing template that always passes.
 """
 
 from __future__ import annotations
@@ -19,8 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.intent_classifier import extract_json
-from app.core.config import settings
-from app.core.llm import claude_call
+from app.core import llm_router
 from app.core.prompts import (
     OUTREACH_OUTPUT_INSTRUCTIONS,
     OUTREACH_VARIANT_FRAMES,
@@ -53,6 +54,9 @@ def count_sentences(text: str) -> int:
 
 def quality_violations(draft: dict, signal_title: str) -> list[str]:
     """All quality-gate rule violations for a draft dict. Empty list = pass."""
+    if draft.get("error") == "quality_gate_fail":
+        return [f"model declined: {draft.get('reason', 'no reason given')}"]
+
     violations: list[str] = []
     body = draft.get("email_body", "") or ""
     subject = draft.get("email_subject", "") or ""
@@ -126,10 +130,10 @@ async def generate_variant(
     icp: Optional[ICPProfile],
     org_id: Optional[str],
 ) -> dict:
-    """Generate one variant with Claude Opus, gate it, retry once, then fall
-    back to the deterministic template."""
+    """Generate one variant, gate it, escalate to the premium tier once on
+    failure, then fall back to the deterministic template."""
     offer = (icp.offer_description if icp else "") or ""
-    fallback = json.dumps(template_draft(variant, account, signal, offer))
+    fallback_dict = template_draft(variant, account, signal, offer)
     context = (
         f"ACCOUNT: {account.company_name} ({account.industry or 'unknown industry'}, "
         f"{account.employee_count or '?'} employees, {account.geography or 'unknown geo'})\n"
@@ -140,29 +144,34 @@ async def generate_variant(
         f"{OUTREACH_VARIANT_FRAMES[variant]}\n{OUTREACH_OUTPUT_INSTRUCTIONS}"
     )
 
-    for attempt in range(2):
-        response = await claude_call(
-            model=settings.model_opus,
-            system=OUTREACH_WRITER_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": context}],
-            max_tokens=800,
-            temperature=0.7 if attempt == 0 else 0.4,
-            org_id=org_id,
-            fallback=fallback,
-        )
-        parsed = extract_json(response)
-        if parsed is None:
-            continue
-        violations = quality_violations(parsed, signal.title or "")
-        if not violations:
-            return parsed
-        logger.info(
-            "Outreach gate rejected %s draft for %s (attempt %d): %s",
-            variant, account.company_name, attempt + 1, "; ".join(violations),
-        )
+    def passes_gate(raw_text: str) -> bool:
+        parsed = extract_json(raw_text)
+        return parsed is not None and not quality_violations(parsed, signal.title or "")
 
-    logger.info("Outreach: using template fallback for %s/%s", account.company_name, variant)
-    return template_draft(variant, account, signal, offer)
+    raw, model_used, fallback_used = await llm_router.generate(
+        system=OUTREACH_WRITER_SYSTEM_PROMPT,
+        prompt=context,
+        org_id=org_id,
+        quality_check=passes_gate,
+        deterministic_fallback=json.dumps(fallback_dict),
+        max_tokens=800,
+        temperature=0.7,
+    )
+
+    if model_used == "template":
+        logger.info("Outreach: using template fallback for %s/%s", account.company_name, variant)
+        return fallback_dict
+
+    parsed = extract_json(raw)
+    if parsed is None:
+        logger.warning(
+            "Outreach: %s response unparseable for %s/%s despite passing quality_check, using template",
+            model_used, account.company_name, variant,
+        )
+        return fallback_dict
+    if fallback_used:
+        logger.info("Outreach: %s (tier 3) used for %s/%s after tier 2 failed", model_used, account.company_name, variant)
+    return parsed
 
 
 async def generate_outreach_for_account(

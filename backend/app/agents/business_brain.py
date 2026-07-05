@@ -2,8 +2,9 @@
 
 RAG-grounded strategic advisor. Retrieves the org's ingested business
 context documents, joins them with live account scores and signals, and
-answers via Claude Opus with the verbatim Brain prompt (streaming) —
-plus scheduled daily briefings and per-deal coaching.
+answers via OpenRouter (mid-tier reasoning model, escalating to Claude
+Opus only if that call fails) with the Brain prompt (streaming) — plus
+scheduled daily briefings and per-deal coaching.
 
 Retrieval: a dependency-free keyword retriever over ``BusinessContextDoc``
 rows. It scores documents by query-term overlap with length normalization —
@@ -22,8 +23,7 @@ from typing import AsyncIterator, Optional, Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
-from app.core.llm import claude_call, claude_stream
+from app.core import llm_router
 from app.core.prompts import (
     BRAIN_SYSTEM_PROMPT,
     BRIEFING_SYSTEM_PROMPT,
@@ -152,7 +152,7 @@ def _demo_answer(question: str, snapshot: str) -> str:
         "Here is what the signal data says right now:\n\n"
         f"{snapshot}\n\n"
         "**Recommended next step:** open the Action Queue and start with the "
-        "highest NEXUS Score. Add your ANTHROPIC_API_KEY to get full strategic reasoning."
+        "highest NEXUS Score. Add your OPENROUTER_API_KEY to get full strategic reasoning."
     )
 
 
@@ -171,13 +171,12 @@ async def ask(
         f"LIVE MARKET SNAPSHOT:\n{snapshot}\n\n"
         f"QUESTION: {question}"
     )
-    async for chunk in claude_stream(
-        model=settings.model_opus,
+    async for chunk in llm_router.brain_stream(
         system=BRAIN_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_message}],
-        max_tokens=2048,
+        prompt=user_message,
         org_id=str(org_id),
         fallback=_demo_answer(question, snapshot),
+        max_tokens=2048,
     ):
         yield chunk
 
@@ -205,13 +204,12 @@ async def generate_briefing(org_id: uuid.UUID, db: AsyncSession) -> BrainBriefin
         "2. Generate outreach for any account with 2+ concurrent signals.\n"
         "3. Add business context docs in Settings so briefings get sharper.\n"
     )
-    content = await claude_call(
-        model=settings.model_opus,
+    content = await llm_router.brain_call(
         system=BRIEFING_SYSTEM_PROMPT.replace("{date}", today.isoformat()),
-        messages=[{"role": "user", "content": f"LIVE MARKET SNAPSHOT:\n{snapshot}"}],
-        max_tokens=1200,
+        prompt=f"LIVE MARKET SNAPSHOT:\n{snapshot}",
         org_id=str(org_id),
         fallback=fallback_md,
+        max_tokens=1200,
     )
     briefing = BrainBriefing(org_id=org_id, briefing_date=today, content_markdown=content)
     db.add(briefing)
@@ -277,11 +275,10 @@ async def coach(entry_id: uuid.UUID, db: AsyncSession) -> str:
         f"**Do this week:** send the analytical variant first, then follow up on day 4 "
         f"referencing the strongest signal directly."
     )
-    return await claude_call(
-        model=settings.model_opus,
+    return await llm_router.brain_call(
         system=DEAL_COACH_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": deal_context}],
-        max_tokens=800,
+        prompt=deal_context,
         org_id=str(account.org_id) if account else None,
         fallback=fallback,
+        max_tokens=800,
     )

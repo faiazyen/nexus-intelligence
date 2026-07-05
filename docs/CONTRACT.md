@@ -118,14 +118,20 @@ dependency in `app/routers/deps.py`. Clerk integration stubbed behind it.
 | service | image/build | port |
 |---|---|---|
 | postgres | postgres:16-alpine | 5432 |
-| redis | redis:7-alpine | 6379 |
 | qdrant | qdrant/qdrant | 6333 |
 | backend | backend/Dockerfile | 8000 |
 | frontend | frontend/Dockerfile | 3000 |
 
-Env var names (see `.env.example`): `DATABASE_URL`, `REDIS_URL`, `QDRANT_URL`,
-`ANTHROPIC_API_KEY`, `APOLLO_API_KEY`, `NEWSAPI_KEY`, `CRUNCHBASE_API_KEY`,
-`NEXT_PUBLIC_API_URL`.
+All LLM calls route through OpenRouter (`app/core/llm_router.py`) — one key,
+one SDK, no Redis (the daily cost tracker is a plain JSONL file under
+`backend/logs/`). See `app/core/llm_router.py`'s module docstring for the
+verified model tiers.
+
+Env var names (see `.env.example`): `DATABASE_URL`, `QDRANT_URL`,
+`OPENROUTER_API_KEY`, `NEXUS_LLM_CLASSIFIER`, `NEXUS_LLM_CLASSIFIER_FALLBACK`,
+`NEXUS_LLM_OUTREACH`, `NEXUS_LLM_BRAIN`, `NEXUS_LLM_FALLBACK`,
+`NEXUS_DAILY_LLM_LIMIT`, `NEXUS_DISABLE_CLAUDE`, `APOLLO_API_KEY`,
+`NEWSAPI_KEY`, `CRUNCHBASE_API_KEY`, `NEXT_PUBLIC_API_URL`.
 
 ## Copy rules (GTM + all outreach templates)
 

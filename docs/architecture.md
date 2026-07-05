@@ -16,25 +16,27 @@ The full loop: **Monitor → Reason → Score → Act**, closed end to end.
 flowchart TD
     subgraph EXEC[Executive Router - supervisor.py]
         direction TB
-        S1[Agent 1: Signal Scout<br/>every 6h - httpx collectors] --> S2[Agent 2: Intent Classifier<br/>Claude Haiku - JSON classification]
+        S1[Agent 1: Signal Scout<br/>every 6h - httpx collectors] --> S2[Agent 2: Intent Classifier<br/>free/cheap OpenRouter tier - JSON classification]
         S2 --> S3[Agent 3: Account Scorer<br/>pure math - services/scoring.py]
         S3 --> Q[(action_queue<br/>score >= 70)]
     end
-    Q -->|user clicks Generate| S4[Agent 4: Outreach Writer<br/>Claude Opus - 3 variants + quality gate]
+    Q -->|user clicks Generate| S4[Agent 4: Outreach Writer<br/>mid-tier reasoning model - 3 variants + quality gate]
     S4 --> D[(outreach_drafts)]
     D -->|outcome recorded| S6[Agent 6: Memory Manager<br/>weight adjustments per signal type]
     S6 -.->|feeds back into| S3
-    B[Agent 5: Business Brain<br/>Claude Opus + RAG retriever] -->|daily 7am + on demand| BR[(brain_briefings)]
+    B[Agent 5: Business Brain<br/>mid-tier reasoning model + RAG retriever] -->|daily 7am + on demand| BR[(brain_briefings)]
     Q -.->|market snapshot| B
 ```
 
 - **Sequencing:** LangGraph `StateGraph` when installed; identical sequential
   runner otherwise (`app/agents/graph.py`). Every node collects errors into a
   human-review channel instead of aborting the run.
-- **Cost guardrail:** `CostTracker` (Redis-backed, in-memory fallback) enforces
-  `< $0.50/day` per 100-account org. Haiku handles all classification; Opus runs
-  only on user-triggered actions (Brain Q&A, outreach) — never on a schedule.
-- **Demo mode:** with no `ANTHROPIC_API_KEY`, every LLM call returns a
+- **Cost guardrail:** `CostTracker` (`app/core/llm_router.py`, file-backed) enforces
+  a hard daily limit (`NEXUS_DAILY_LLM_LIMIT`, default $0.25). All LLM calls route
+  through OpenRouter across cost tiers — a free tier and an ultra-cheap tier handle
+  classification, a mid-tier reasoning model handles outreach and Brain Q&A, and
+  Claude Opus is a premium fallback only on quality-gate or error escalation.
+- **Demo mode:** with no `OPENROUTER_API_KEY`, every LLM call returns a
   deterministic grounded fallback; the classifier uses per-signal-type
   heuristics; the whole platform demos end to end.
 
@@ -43,9 +45,10 @@ flowchart TD
 1. **Collect** — Signal Scout hits SEC EDGAR (free/official), NewsAPI, Crunchbase
    (keyed), normalizes to `{company, signal_type, source, title, raw_data}`,
    dedupes, find-or-creates the `Account`, inserts `Signal(status="new")`.
-2. **Classify** — Haiku labels urgency tier (HOT/WARM/COOL), budget implication,
-   decision-maker involvement, action window; defensive JSON parsing with
-   heuristic fallback. `status → classified`.
+2. **Classify** — the free OpenRouter tier (falling back to an ultra-cheap paid
+   tier) labels urgency tier (HOT/WARM/COOL), budget implication, decision-maker
+   involvement, action window; defensive JSON parsing with a rule-based
+   heuristic as the guaranteed final fallback. `status → classified`.
 3. **Score** — pure functions compute Urgency (recency decay × type weight ×
    concurrency), Fit (industry/size/geo/tech vs ICP), Budget Probability
    (additive type weights, cap 100). Composite = `u·f·b / 10000`. Accounts ≥ 70
@@ -97,11 +100,21 @@ API is unreachable, so the frontend demos standalone. Live signals arrive via
 
 ## Model tier routing
 
+All calls go through OpenRouter (`app/core/llm_router.py`) — one key, one SDK. See
+that module's docstring and the README's routing table for the exact verified model
+slugs and pricing (both drift; re-check against `openrouter.ai/api/v1/models` before
+trusting either as current).
+
 | Tier | Used for | Why |
 |---|---|---|
-| Haiku | Signal classification | High volume, structured output, cheap |
-| Sonnet | Bulk processing (batch summaries) | Mid-cost balance |
-| Opus | Brain Q&A, briefings, coaching, outreach | Quality-critical, demand-driven |
+| 0 — free | Signal classification (first attempt) | High volume, zero cost, best-effort |
+| 1 — ultra-cheap | Signal classification (fallback) | Still near-free if tier 0 fails/errors |
+| 2 — mid-tier | Outreach generation, Brain Q&A/briefings/coaching | Quality-critical, demand-driven |
+| 3 — premium (Claude) | Outreach/Brain fallback only | Used only on quality-gate or error escalation |
+
+Every tier ultimately backs onto a zero-cost, zero-network final fallback (the
+rule-based heuristic classifier or the deterministic outreach template) that can
+never fail outright.
 
 ## Deployment topology
 

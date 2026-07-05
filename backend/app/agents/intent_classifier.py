@@ -1,12 +1,14 @@
 """AGENT 2 — Intent Classifier.
 
-Event-driven: takes signals with status ``new``, classifies each with Claude
-Haiku (cost-efficient) using the verbatim Signal Classifier prompt, and
+Event-driven: takes signals with status ``new``, classifies each via
+OpenRouter (free tier first, then an ultra-cheap paid tier — see
+app.core.llm_router) using the JSON-strict Signal Classifier prompt, and
 writes urgency tier, budget implication, decision-maker flag, action window,
 and a one-line summary back to the row. Status ``new`` -> ``classified``.
 
-When no API key is configured, a deterministic heuristic classifier stands
-in so the downstream pipeline still functions.
+The rule-based heuristic below is not just a demo-mode stand-in — it's the
+guaranteed, zero-cost, zero-latency final fallback if every model tier
+fails, so classification can never leave a signal stuck unprocessed.
 """
 
 from __future__ import annotations
@@ -21,9 +23,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.graph import compile_pipeline
-from app.core.config import settings
-from app.core.llm import claude_call
-from app.core.prompts import SIGNAL_CLASSIFIER_SYSTEM_PROMPT
+from app.core import llm_router
+from app.core.prompts import SIGNAL_CLASSIFIER_SYSTEM_PROMPT_STRICT
 from app.db.models import Signal, utcnow
 
 logger = logging.getLogger("nexus.agents.classifier")
@@ -102,22 +103,20 @@ def sanitize_classification(payload: dict, signal: Signal) -> dict:
 
 
 async def classify_signal(signal: Signal, org_id: Optional[str] = None) -> dict:
-    """Classify one signal via Claude Haiku, with heuristic fallback."""
-    fallback_json = json.dumps(heuristic_classification(signal))
+    """Classify one signal via OpenRouter (free -> ultra-cheap -> heuristic)."""
+    heuristic_json = json.dumps(heuristic_classification(signal))
     prompt = (
         f"Signal source: {signal.source}\n"
         f"Detected signal type hint: {signal.signal_type}\n"
         f"Title: {signal.title}\n"
         f"Raw data: {json.dumps(signal.raw_data or {}, default=str)[:2000]}"
     )
-    response = await claude_call(
-        model=settings.model_haiku,
-        system=SIGNAL_CLASSIFIER_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=400,
-        temperature=0.0,
+    response = await llm_router.classify(
+        system=SIGNAL_CLASSIFIER_SYSTEM_PROMPT_STRICT,
+        prompt=prompt,
         org_id=org_id,
-        fallback=fallback_json,
+        heuristic_fallback=heuristic_json,
+        max_tokens=400,
     )
     parsed = extract_json(response)
     if parsed is None:

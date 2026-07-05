@@ -142,3 +142,28 @@ Counts by type and urgency tier over the last 30 days.
  "by_type": [{"signal_type": "job_post", "count": 6}],
  "by_tier": [{"urgency_tier": "HOT", "count": 5}]}
 ```
+
+### `GET /analytics/pipeline-events`
+Recent pipeline-level audit events (collector failures, budget-exceeded stops).
+Per-call LLM routing detail lives in `/analytics/costs` instead. Optional
+`?limit=` query param, default 50, max 200.
+```json
+{"events": [
+  {"id": "<uuid>", "event_type": "budget_exceeded",
+   "detail": {"stage": "intent_classifier", "error": "..."},
+   "created_at": "2026-07-06T09:00:00Z"}
+]}
+```
+
+### `GET /analytics/costs`
+Today's LLM spend, read from OpenRouter's authoritative per-request `usage.cost`
+(see `app/core/llm_router.py`), broken down by model and by purpose.
+```json
+{"total_usd": 0.08,
+ "by_model": {"moonshotai/kimi-k2-thinking": 0.08},
+ "by_purpose": {"classify": 0.0, "outreach": 0.05, "brain": 0.03},
+ "top_model_by_purpose": {"outreach": "moonshotai/kimi-k2-thinking"},
+ "fallback_events": [],
+ "daily_limit_usd": 0.25,
+ "over_budget": false}
+```

@@ -1,19 +1,21 @@
-"""Analytics routes: pipeline funnel and signal distribution."""
+"""Analytics routes: pipeline funnel, signal distribution, audit trail, LLM cost."""
 
 from __future__ import annotations
 
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.llm_router import cost_tracker
 from app.db.models import (
     Account,
     AccountScore,
     ActionQueueEntry,
     Organization,
     OutreachDraft,
+    PipelineEvent,
     Signal,
     utcnow,
 )
@@ -127,3 +129,46 @@ async def signal_distribution(
             for tier, c in by_tier_rows
         ],
     }
+
+
+@router.get("/pipeline-events")
+async def pipeline_events(
+    limit: int = 50,
+    org: Organization = Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Recent pipeline-level audit events (collector failures, budget
+    stops) — so a day's run is never an unexplained black box. Per-call
+    LLM routing/fallback detail lives in GET /analytics/costs instead."""
+    rows = (
+        (
+            await db.execute(
+                select(PipelineEvent)
+                .where(PipelineEvent.org_id == org.id)
+                .order_by(desc(PipelineEvent.created_at))
+                .limit(min(limit, 200))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "events": [
+            {
+                "id": str(row.id),
+                "event_type": row.event_type,
+                "detail": row.detail,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+            for row in rows
+        ]
+    }
+
+
+@router.get("/costs")
+async def llm_costs(
+    org: Organization = Depends(get_current_org),
+) -> dict:
+    """Today's LLM spend broken down by model and by purpose, with any
+    Tier 3 (Claude) fallback events highlighted."""
+    return cost_tracker.today_summary(str(org.id))

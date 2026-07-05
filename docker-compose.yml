@@ -1,20 +1,21 @@
 # NEXUS Intelligence — local development stack
 #
 # Usage:
-#   cp .env.example .env        # add your ANTHROPIC_API_KEY
+#   cp .env.example .env        # add your OPENROUTER_API_KEY
 #   docker-compose up --build
 #
 # Services (per docs/CONTRACT.md):
 #   postgres  postgres:16-alpine   :5432
-#   redis     redis:7-alpine       :6379
 #   qdrant    qdrant/qdrant        :6333
 #   backend   backend/Dockerfile   :8000
 #   frontend  frontend/Dockerfile  :3000
 #
-# DATABASE_URL / REDIS_URL / QDRANT_URL are pinned to the compose service
-# network here (a host-side .env pointing at localhost must not leak into
-# containers). API keys pass through from .env with empty defaults —
-# agents degrade gracefully without them.
+# All LLM calls route through OpenRouter (app/core/llm_router.py) — no
+# Redis service needed; the daily cost tracker is a plain file under
+# backend/logs/. DATABASE_URL / QDRANT_URL are pinned to the compose
+# service network here (a host-side .env pointing at localhost must not
+# leak into containers). API keys pass through from .env with empty
+# defaults — agents degrade gracefully without them.
 
 services:
   postgres:
@@ -31,16 +32,6 @@ services:
       test: ["CMD-SHELL", "pg_isready -U nexus -d nexus"]
       interval: 5s
       timeout: 5s
-      retries: 12
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
       retries: 12
 
   qdrant:
@@ -66,9 +57,10 @@ services:
       ENVIRONMENT: development
       DEBUG: "true"
       DATABASE_URL: postgresql+asyncpg://nexus:nexus@postgres:5432/nexus
-      REDIS_URL: redis://redis:6379/0
       QDRANT_URL: http://qdrant:6333
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      NEXUS_DAILY_LLM_LIMIT: ${NEXUS_DAILY_LLM_LIMIT:-0.25}
+      NEXUS_DISABLE_CLAUDE: ${NEXUS_DISABLE_CLAUDE:-false}
       APOLLO_API_KEY: ${APOLLO_API_KEY:-}
       NEWSAPI_KEY: ${NEWSAPI_KEY:-}
       CRUNCHBASE_API_KEY: ${CRUNCHBASE_API_KEY:-}
@@ -79,8 +71,6 @@ services:
       - ./backend:/app
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       qdrant:
         condition: service_healthy

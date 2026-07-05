@@ -195,3 +195,20 @@ class BrainBriefing(Base):
     briefing_date: Mapped[date] = mapped_column(Date, nullable=False)
     content_markdown: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PipelineEvent(Base):
+    """Minimal audit trail: one row per notable pipeline decision or
+    degradation (model fallback used, tier skipped over budget, a
+    collector/agent failure). Exists so the pipeline is never a black
+    box — see docs/PRODUCT_AUDIT_AND_MVP.md section C/F/J."""
+
+    __tablename__ = "pipeline_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    # classify_fallback|classify_heuristic|outreach_fallback|outreach_template|
+    # brain_fallback|brain_unavailable|budget_exceeded|collector_error
+    detail: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

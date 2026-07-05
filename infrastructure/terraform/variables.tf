@@ -128,8 +128,8 @@ variable "qdrant_url" {
   default     = "http://qdrant.internal:6333"
 }
 
-variable "anthropic_api_key" {
-  description = "Anthropic Claude API key (stored in Secrets Manager)"
+variable "openrouter_api_key" {
+  description = "OpenRouter API key (stored in Secrets Manager) — all LLM calls route through OpenRouter, see app/core/llm_router.py"
   type        = string
   sensitive   = true
 }

@@ -3,6 +3,15 @@
 The Brain, Outreach Writer, and Signal Classifier prompts are verbatim from
 Part 6 of docs/MASTER_PRODUCT_DOCUMENT.md. Do not edit their wording without
 updating the master document.
+
+_STRICT variants below are used for the non-Claude tiers (classifier tiers
+0/1, outreach tier 2) that OpenRouter routing now hits first. Claude
+reliably follows the softer, more conversational original prompts even
+without an explicit JSON schema spelled out; smaller/cheaper open models
+are noticeably less reliable at implicit formatting conventions and need
+the schema, the "no prose outside the JSON" rule, and an explicit escape
+hatch spelled out. The Tier 3 Claude fallback keeps using the original,
+unmodified prompts.
 """
 
 BRAIN_SYSTEM_PROMPT = """You are the NEXUS Business Brain — a strategic intelligence advisor with
@@ -53,6 +62,13 @@ extract structured data. Be precise. Return JSON:
   "summary": "1 sentence: what this signal means for a B2B vendor"
 }"""
 
+SIGNAL_CLASSIFIER_SYSTEM_PROMPT_STRICT = SIGNAL_CLASSIFIER_SYSTEM_PROMPT + """
+
+Return ONLY a JSON object, no other text before or after it.
+Use exactly these keys: signal_type, urgency_tier, budget_implication,
+decision_maker_involved, days_to_action_window, summary.
+Do NOT wrap the JSON in markdown code blocks (no ``` fences)."""
+
 # Extensions of the Brain persona for scheduled and deal-scoped outputs.
 
 BRIEFING_SYSTEM_PROMPT = BRAIN_SYSTEM_PROMPT + """
@@ -85,7 +101,8 @@ OUTREACH_VARIANT_FRAMES = {
 }
 
 OUTREACH_OUTPUT_INSTRUCTIONS = """
-Return STRICT JSON only, no prose around it:
+Return your response as valid JSON with these exact keys: email_subject,
+email_body, linkedin_message, call_script, positioning_frame.
 {
   "email_subject": "...",
   "email_body": "...",
@@ -93,4 +110,10 @@ Return STRICT JSON only, no prose around it:
   "call_script": "...",
   "positioning_frame": "..."
 }
-Never use em dashes or double hyphens anywhere in the copy."""
+Do NOT include any text before or after the JSON block.
+Do NOT wrap the JSON in markdown code fences.
+Do NOT use markdown formatting (no **bold**, no bullet lists) inside the
+JSON string values.
+Never use em dashes or double hyphens anywhere in the copy.
+If you cannot generate quality outreach for this signal, return exactly:
+{"error": "quality_gate_fail", "reason": "<brief reason>"}"""

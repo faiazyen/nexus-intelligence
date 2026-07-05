@@ -38,7 +38,7 @@ data "aws_iam_policy_document" "secrets_read" {
 
     resources = [
       aws_secretsmanager_secret.database_url.arn,
-      aws_secretsmanager_secret.anthropic_api_key.arn,
+      aws_secretsmanager_secret.openrouter_api_key.arn,
       aws_secretsmanager_secret.apollo_api_key.arn,
       aws_secretsmanager_secret.newsapi_key.arn,
       aws_secretsmanager_secret.crunchbase_api_key.arn,
@@ -148,7 +148,10 @@ resource "aws_ecs_task_definition" "backend" {
       environment = [
         { name = "ENVIRONMENT", value = var.environment },
         { name = "DEBUG", value = "false" },
-        { name = "REDIS_URL", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/0" },
+        # No REDIS_URL: all LLM calls route through OpenRouter (one key, no
+        # Redis), see app/core/llm_router.py. The ElastiCache cluster
+        # resource below is unapplied infra kept for a future Celery need,
+        # not currently read by anything.
         { name = "QDRANT_URL", value = var.qdrant_url },
         { name = "CORS_ORIGINS", value = "http://${aws_lb.main.dns_name}" },
         { name = "ASSETS_BUCKET", value = aws_s3_bucket.assets.bucket },
@@ -156,7 +159,7 @@ resource "aws_ecs_task_definition" "backend" {
 
       secrets = [
         { name = "DATABASE_URL", valueFrom = aws_secretsmanager_secret.database_url.arn },
-        { name = "ANTHROPIC_API_KEY", valueFrom = aws_secretsmanager_secret.anthropic_api_key.arn },
+        { name = "OPENROUTER_API_KEY", valueFrom = aws_secretsmanager_secret.openrouter_api_key.arn },
         { name = "APOLLO_API_KEY", valueFrom = aws_secretsmanager_secret.apollo_api_key.arn },
         { name = "NEWSAPI_KEY", valueFrom = aws_secretsmanager_secret.newsapi_key.arn },
         { name = "CRUNCHBASE_API_KEY", valueFrom = aws_secretsmanager_secret.crunchbase_api_key.arn },

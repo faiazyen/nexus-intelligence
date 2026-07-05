@@ -25,22 +25,33 @@ class Settings(BaseSettings):
     debug: bool = True
 
     database_url: str = "postgresql+asyncpg://nexus:nexus@localhost:5432/nexus"
-    redis_url: str = "redis://localhost:6379/0"
+    # Redis was dropped along with the old direct-Anthropic cost tracker it
+    # backed (see app/core/llm_router.py's file-based CostTracker instead).
     qdrant_url: str = "http://localhost:6333"
 
-    anthropic_api_key: str = ""
-    model_opus: str = "claude-opus-4-8"
-    model_sonnet: str = "claude-sonnet-5"
-    model_haiku: str = "claude-haiku-4-5-20251001"
+    # All LLM calls route through OpenRouter (one key, one SDK) — see
+    # app/core/llm_router.py. Slugs default to what was verified against
+    # OpenRouter's live /api/v1/models catalog; override per-env if that
+    # catalog has moved on by the time this runs.
+    openrouter_api_key: str = ""
+    nexus_llm_classifier: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+    nexus_llm_classifier_fallback: str = "deepseek/deepseek-v4-flash"
+    nexus_llm_outreach: str = "moonshotai/kimi-k2-thinking"
+    nexus_llm_brain: str = "moonshotai/kimi-k2-thinking"
+    nexus_llm_fallback: str = "anthropic/claude-opus-4.8"
+    # Hard daily spend limit (USD) before routing drops to free-tier/rule-
+    # based paths only. Revised down from the pre-OpenRouter $0.50 default
+    # now that a real per-request cost is available to enforce against.
+    nexus_daily_llm_limit: float = 0.25
+    # Skips the anthropic/* fallback slug entirely (still via OpenRouter,
+    # not a separate key) — for pure non-Claude beta cost testing.
+    nexus_disable_claude: bool = False
 
     apollo_api_key: str = ""
     newsapi_key: str = ""
     crunchbase_api_key: str = ""
 
     cors_origins: str = "http://localhost:3000"
-
-    # Cost guardrail: max daily Claude spend per 100-account org (USD)
-    daily_llm_budget_usd: float = 0.50
 
 
 @lru_cache

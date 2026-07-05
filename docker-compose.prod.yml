@@ -3,7 +3,7 @@
 # Standalone file (NOT an override — compose merge semantics cannot remove
 # the dev bind mounts, so this file is complete on its own):
 #
-#   POSTGRES_PASSWORD=... ANTHROPIC_API_KEY=... NEXT_PUBLIC_API_URL=https://api.example.com \
+#   POSTGRES_PASSWORD=... OPENROUTER_API_KEY=... NEXT_PUBLIC_API_URL=https://api.example.com \
 #     docker compose -f docker-compose.prod.yml up -d --build
 #
 # Differences from dev:
@@ -11,8 +11,12 @@
 #   - restart policies + CPU/memory limits on every service
 #   - uvicorn runs 4 workers (uvicorn's multi-worker mode; gunicorn is not
 #     in requirements.txt, so we stay on uvicorn)
-#   - postgres/redis/qdrant are NOT published to the host
+#   - postgres/qdrant are NOT published to the host
 #   - required secrets fail fast if unset (:? interpolation)
+#
+# All LLM calls route through OpenRouter (app/core/llm_router.py); there is
+# no Redis service since the daily cost tracker is a plain file under
+# backend/logs/ (see docs/PRODUCT_AUDIT_AND_MVP.md section F).
 
 services:
   postgres:
@@ -34,21 +38,6 @@ services:
         limits:
           cpus: "1.0"
           memory: 1G
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 384M
 
   qdrant:
     image: qdrant/qdrant
@@ -76,9 +65,10 @@ services:
       ENVIRONMENT: production
       DEBUG: "false"
       DATABASE_URL: postgresql+asyncpg://nexus:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in production}@postgres:5432/nexus
-      REDIS_URL: redis://redis:6379/0
       QDRANT_URL: http://qdrant:6333
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY must be set in production}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?OPENROUTER_API_KEY must be set in production}
+      NEXUS_DAILY_LLM_LIMIT: ${NEXUS_DAILY_LLM_LIMIT:-0.25}
+      NEXUS_DISABLE_CLAUDE: ${NEXUS_DISABLE_CLAUDE:-false}
       APOLLO_API_KEY: ${APOLLO_API_KEY:-}
       NEWSAPI_KEY: ${NEWSAPI_KEY:-}
       CRUNCHBASE_API_KEY: ${CRUNCHBASE_API_KEY:-}
@@ -86,8 +76,6 @@ services:
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       qdrant:
         condition: service_healthy

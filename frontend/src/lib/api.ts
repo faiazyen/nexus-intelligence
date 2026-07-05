@@ -12,6 +12,7 @@ import type {
   Account,
   BrainBriefing,
   ICPProfile,
+  LLMCostSummary,
   OutreachDraft,
   PipelineFunnelStage,
   Signal,
@@ -22,6 +23,7 @@ import {
   demoAccounts,
   demoActionQueue,
   demoBriefing,
+  demoCostSummary,
   demoICP,
   demoPipeline,
   demoPlanUsage,
@@ -33,6 +35,7 @@ import {
 import {
   mapAccountProfileResponse,
   mapBriefingResponse,
+  mapCostSummary,
   mapICPFromWire,
   mapICPToWire,
   mapOutreachResponse,
@@ -99,6 +102,7 @@ export const queryKeys = {
   icp: ["intent", "icp"] as const,
   planUsage: ["billing", "plan-usage"] as const,
   todayStats: ["intent", "today-stats"] as const,
+  costs: ["analytics", "costs"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -379,6 +383,19 @@ export function usePlanUsage() {
   return useQuery({
     queryKey: queryKeys.planUsage,
     queryFn: () => withFallback(async () => demoPlanUsage, demoPlanUsage),
+  });
+}
+
+async function fetchCostSummary(): Promise<LLMCostSummary> {
+  const raw = await apiFetch<Record<string, unknown>>("/api/v1/analytics/costs");
+  return mapCostSummary(raw);
+}
+
+export function useCostSummary() {
+  return useQuery({
+    queryKey: queryKeys.costs,
+    queryFn: () => withFallback(fetchCostSummary, demoCostSummary),
+    staleTime: 30_000,
   });
 }
 

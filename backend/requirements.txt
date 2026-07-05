@@ -5,11 +5,12 @@ asyncpg>=0.30
 alembic>=1.14
 pydantic>=2.9
 pydantic-settings>=2.6
-anthropic>=0.40
+# All LLM calls route through OpenRouter's OpenAI-compatible endpoint (see
+# app/core/llm_router.py) — one SDK, one key, no separate anthropic package.
+openai>=1.50
 langgraph>=0.2.60
 langchain-core>=0.3
 qdrant-client>=1.12
-redis>=5.2
 celery>=5.4
 httpx>=0.27
 sse-starlette>=2.1
