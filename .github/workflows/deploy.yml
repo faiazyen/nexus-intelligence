@@ -1,0 +1,125 @@
+# NEXUS Intelligence — Deploy
+#
+# Trigger: runs after the "CI" workflow completes successfully on main.
+# Flow: build + push Docker images to ECR, then terraform plan/apply gated
+# behind the GitHub "production" environment (configure required reviewers
+# on that environment for the manual approval step).
+#
+# Required repository secrets:
+#   AWS_ACCESS_KEY_ID       IAM user/role key with ECR + deploy permissions
+#   AWS_SECRET_ACCESS_KEY   Matching secret key
+#   AWS_ACCOUNT_ID          12-digit AWS account id (ECR registry host)
+#   AWS_REGION              e.g. us-east-1
+#   TF_STATE_BUCKET         S3 bucket holding terraform remote state
+#   DB_PASSWORD             RDS master password (TF_VAR)
+#   ANTHROPIC_API_KEY       Claude API key (stored in Secrets Manager by TF)
+#   APOLLO_API_KEY          optional, may be empty
+#   NEWSAPI_KEY             optional, may be empty
+#   CRUNCHBASE_API_KEY      optional, may be empty
+#
+# Required repository variables (Settings > Variables):
+#   NEXT_PUBLIC_API_URL     public API base URL baked into the frontend build
+
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+  IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
+
+jobs:
+  build-and-push:
+    name: Build and push images to ECR
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (CI-tested commit)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push backend image
+        run: |
+          docker build \
+            -t "$ECR_REGISTRY/nexus-backend:$IMAGE_TAG" \
+            -t "$ECR_REGISTRY/nexus-backend:latest" \
+            backend
+          docker push --all-tags "$ECR_REGISTRY/nexus-backend"
+
+      - name: Build and push frontend image
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL="${{ vars.NEXT_PUBLIC_API_URL }}" \
+            -t "$ECR_REGISTRY/nexus-frontend:$IMAGE_TAG" \
+            -t "$ECR_REGISTRY/nexus-frontend:latest" \
+            frontend
+          docker push --all-tags "$ECR_REGISTRY/nexus-frontend"
+
+  terraform:
+    name: Terraform plan + apply (manual approval)
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    # The "production" environment must be configured with required reviewers
+    # in repo settings — that is the manual approval gate.
+    environment: production
+    defaults:
+      run:
+        working-directory: infrastructure/terraform
+    env:
+      TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
+      TF_VAR_backend_image_tag: ${{ github.event.workflow_run.head_sha }}
+      TF_VAR_frontend_image_tag: ${{ github.event.workflow_run.head_sha }}
+      TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+      TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+      TF_VAR_apollo_api_key: ${{ secrets.APOLLO_API_KEY }}
+      TF_VAR_newsapi_key: ${{ secrets.NEWSAPI_KEY }}
+      TF_VAR_crunchbase_api_key: ${{ secrets.CRUNCHBASE_API_KEY }}
+    steps:
+      - name: Checkout (CI-tested commit)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+
+      - name: Terraform init
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=nexus-intelligence/production.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}"
+
+      - name: Terraform plan
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform apply
+        run: terraform apply -input=false tfplan

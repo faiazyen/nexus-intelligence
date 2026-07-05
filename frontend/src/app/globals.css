@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --nexus-bg: #0a0e1a;
+  --nexus-surface: #111827;
+  --nexus-surface-2: #161f2e;
+  --nexus-border: #1f2937;
+  --nexus-cyan: #22d3ee;
+  --nexus-emerald: #10b981;
+  --nexus-amber: #f59e0b;
+  --nexus-red: #ef4444;
+  --nexus-text: #f9fafb;
+  --nexus-muted: #9ca3af;
+}
+
+* {
+  border-color: var(--nexus-border);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--nexus-bg);
+  color: var(--nexus-text);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(34, 211, 238, 0.28);
+  color: #f9fafb;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #1f2937;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #29374a;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Background texture: faint grid + radial vignette, no gradients-for-decoration */
+.nexus-bg-texture {
+  background-color: var(--nexus-bg);
+  background-image:
+    radial-gradient(ellipse 80% 60% at 15% -10%, rgba(34, 211, 238, 0.06), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 100% 0%, rgba(16, 185, 129, 0.04), transparent 60%),
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: auto, auto, 44px 44px, 44px 44px;
+}
+
+.nexus-noise::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.nexus-card {
+  background-color: var(--nexus-surface);
+  border: 1px solid var(--nexus-border);
+  border-radius: 10px;
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, #161f2e 25%, #1c2637 37%, #161f2e 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+.link-underline {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 0% 1px;
+  transition: background-size 0.25s ease;
+}
+.link-underline:hover {
+  background-size: 100% 1px;
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--nexus-cyan);
+  outline-offset: 2px;
+}
