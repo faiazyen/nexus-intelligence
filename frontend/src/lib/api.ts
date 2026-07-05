@@ -30,6 +30,15 @@ import {
   demoTodayStats,
   buildDemoOutreach,
 } from "./demo-data";
+import {
+  mapAccountProfileResponse,
+  mapBriefingResponse,
+  mapOutreachResponse,
+  mapPipelineResponse,
+  mapQueueResponse,
+  mapSignal,
+  mapSignalsHistoryResponse,
+} from "./mappers";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8000";
@@ -91,7 +100,10 @@ export const queryKeys = {
 // ---------------------------------------------------------------------------
 
 async function fetchQueue(): Promise<ActionQueueEntry[]> {
-  return apiFetch<ActionQueueEntry[]>("/api/v1/intent/queue");
+  const raw = await apiFetch<Record<string, unknown>>("/api/v1/intent/queue");
+  const mapped = mapQueueResponse(raw);
+  if (mapped.length === 0) throw new ApiUnavailableError("empty live queue, show demo");
+  return mapped;
 }
 
 export function useActionQueue() {
@@ -113,7 +125,8 @@ interface AccountProfileResponse {
 }
 
 async function fetchAccount(id: string): Promise<AccountProfileResponse> {
-  return apiFetch<AccountProfileResponse>(`/api/v1/intent/account/${id}`);
+  const raw = await apiFetch<Record<string, unknown>>(`/api/v1/intent/account/${id}`);
+  return mapAccountProfileResponse(raw);
 }
 
 function demoAccountProfile(id: string): AccountProfileResponse {
@@ -139,9 +152,15 @@ export function useAccountProfile(id: string) {
 // ---------------------------------------------------------------------------
 
 async function generateOutreach(accountId: string): Promise<OutreachDraft> {
-  return apiFetch<OutreachDraft>(`/api/v1/intent/outreach/${accountId}`, {
-    method: "POST",
-  });
+  const raw = await apiFetch<Record<string, unknown>>(
+    `/api/v1/intent/outreach/${accountId}`,
+    { method: "POST" }
+  );
+  const mapped = mapOutreachResponse(raw, accountId);
+  if (mapped.variants.length === 0) {
+    throw new ApiUnavailableError("no live drafts, show demo");
+  }
+  return mapped;
 }
 
 export function useGenerateOutreach() {
@@ -192,7 +211,8 @@ export function useUpdateICP() {
 // ---------------------------------------------------------------------------
 
 async function fetchBriefing(): Promise<BrainBriefing> {
-  return apiFetch<BrainBriefing>("/api/v1/brain/briefing");
+  const raw = await apiFetch<Record<string, unknown>>("/api/v1/brain/briefing");
+  return mapBriefingResponse(raw);
 }
 
 export function useBrainBriefing() {
@@ -219,7 +239,10 @@ export async function postOnboard(payload: Record<string, unknown>): Promise<{ o
 // ---------------------------------------------------------------------------
 
 async function fetchSignalsHistory(days: number): Promise<Signal[]> {
-  return apiFetch<Signal[]>(`/api/v1/signals/history/${days}`);
+  const raw = await apiFetch<Record<string, unknown>>(`/api/v1/signals/history/${days}`);
+  const mapped = mapSignalsHistoryResponse(raw);
+  if (mapped.length === 0) throw new ApiUnavailableError("empty live history, show demo");
+  return mapped;
 }
 
 export function useSignalsHistory(days: number) {
@@ -263,8 +286,7 @@ export function subscribeToSignalStream(
     es.onopen = () => onModeChange?.("live");
     es.onmessage = (event) => {
       try {
-        const parsed = JSON.parse(event.data) as Signal;
-        onSignal(parsed);
+        onSignal(mapSignal(JSON.parse(event.data)));
       } catch {
         // ignore malformed frame
       }
@@ -290,7 +312,10 @@ export function subscribeToSignalStream(
 // ---------------------------------------------------------------------------
 
 async function fetchPipeline(): Promise<PipelineFunnelStage[]> {
-  return apiFetch<PipelineFunnelStage[]>("/api/v1/analytics/pipeline");
+  const raw = await apiFetch<Record<string, unknown>>("/api/v1/analytics/pipeline");
+  const mapped = mapPipelineResponse(raw);
+  if (mapped.length === 0) throw new ApiUnavailableError("empty live funnel, show demo");
+  return mapped;
 }
 
 export function usePipelineAnalytics() {

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import timedelta
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -81,7 +82,7 @@ async def stream_signals(
 
 
 class CustomSignalRequest(BaseModel):
-    account_id: str | None = None
+    account_id: Optional[str] = None
     company_name: str = Field(default="", max_length=255)
     signal_type: str = Field(min_length=1, max_length=64)
     title: str = Field(min_length=1, max_length=512)

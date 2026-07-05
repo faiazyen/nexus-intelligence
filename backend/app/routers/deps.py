@@ -7,6 +7,7 @@ any real IdP) slots in behind ``get_current_org`` without touching routers.
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy import select
@@ -19,7 +20,7 @@ DEMO_ORG_NAME = "NEXUS Demo Org"
 
 
 async def get_current_org(
-    x_org_id: str | None = Header(default=None),
+    x_org_id: Optional[str] = Header(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> Organization:
     """Resolve the calling organization from the ``X-Org-Id`` header.
