@@ -739,9 +739,9 @@ export const demoBriefing: BrainBriefing = {
 
 ### Who to call today
 
-1. **Dana Okafor, CCO at Meridian Capital** — reference the regulatory-technology procurement notice directly. She named the problem; you're the first vendor to notice.
-2. **Priya Nair, VP Risk Ops at BluePeak Financial** — reference the Series C and the founder letter language together. Budget is confirmed, timing is now.
-3. **Renata Silva, VP Plant Ops at Ironclad Manufacturing** — reference the MES pre-solicitation. Position around shaping requirements, not responding to them.
+1. **Dana Okafor, CCO at Meridian Capital**: reference the regulatory-technology procurement notice directly. She named the problem; you're the first vendor to notice.
+2. **Priya Nair, VP Risk Ops at BluePeak Financial**: reference the Series C and the founder letter language together. Budget is confirmed, timing is now.
+3. **Renata Silva, VP Plant Ops at Ironclad Manufacturing**: reference the MES pre-solicitation. Position around shaping requirements, not responding to them.
 
 ### Market pattern worth noting
 

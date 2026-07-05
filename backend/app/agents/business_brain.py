@@ -198,7 +198,7 @@ async def generate_briefing(org_id: uuid.UUID, db: AsyncSession) -> BrainBriefin
 
     snapshot = await _market_snapshot(db, org_id)
     fallback_md = (
-        f"# Daily Brief — {today.isoformat()}\n\n"
+        f"# Daily Brief, {today.isoformat()}\n\n"
         f"## Where the heat is\n\n{snapshot}\n\n"
         "## Recommended actions today\n\n"
         "1. Work the Action Queue from the top score down.\n"

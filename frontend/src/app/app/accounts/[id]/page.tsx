@@ -174,10 +174,12 @@ export default function AccountProfilePage() {
         </div>
       )}
 
-      {/* Outreach */}
+      {/* Outreach: a fresh mutation result takes priority; otherwise fall
+          back to whatever was already generated and persisted for this
+          account, so reloading the page doesn't lose prior outreach. */}
       {tab === "outreach" && (
         <div className="mt-5">
-          {!generateOutreach.data && !generateOutreach.isPending && (
+          {!generateOutreach.data && !profile.data?.outreachDraft && !generateOutreach.isPending && (
             <EmptyState
               title="No outreach generated yet"
               description="NEXUS drafts three variants anchored to this account's strongest signal: assertive, analytical, and challenger."
@@ -188,10 +190,10 @@ export default function AccountProfilePage() {
               }
             />
           )}
-          {(generateOutreach.data || generateOutreach.isPending) && (
+          {(generateOutreach.data || profile.data?.outreachDraft || generateOutreach.isPending) && (
             <OutreachPanel
               accountId={accountId}
-              draft={generateOutreach.data}
+              draft={generateOutreach.data ?? profile.data?.outreachDraft}
               isLoading={generateOutreach.isPending}
               isError={generateOutreach.isError}
               onRetry={() => generateOutreach.mutate(accountId)}

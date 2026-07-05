@@ -81,13 +81,28 @@ async def ask(
     except ImportError as exc:
         raise HTTPException(status_code=503, detail=f"Agent system unavailable: {exc}")
 
+    def encode_sse_event(chunk: str) -> bytes:
+        """Encode one chunk as a spec-compliant SSE event.
+
+        A single ``data:`` line cannot contain a raw newline — chunks with
+        embedded ``\\n`` (e.g. markdown section breaks in demo-mode
+        fallback text) must be sent as multiple consecutive ``data:``
+        lines, one per source line, per the SSE spec. Sending a raw
+        newline inside one line silently truncates the event for clients
+        that parse line-by-line (the continuation arrives with no
+        ``data:`` prefix and gets dropped, eating whole words).
+        """
+        lines = chunk.split("\n")
+        body = "".join(f"data: {line}\n" for line in lines)
+        return (body + "\n").encode("utf-8")
+
     async def event_stream():
         try:
             async for chunk in run_brain_ask(org.id, payload.question, db):
-                yield f"data: {chunk}\n\n".encode("utf-8")
-            yield b"data: [DONE]\n\n"
+                yield encode_sse_event(chunk)
+            yield encode_sse_event("[DONE]")
         except Exception as exc:  # noqa: BLE001 — surface inside the stream
-            yield f"data: [ERROR] {exc}\n\n".encode("utf-8")
+            yield encode_sse_event(f"[ERROR] {exc}")
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

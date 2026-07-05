@@ -49,7 +49,20 @@ def compile_pipeline(name: str, nodes: Sequence[tuple[str, NodeFn]]) -> Any:
 
         graph = StateGraph(dict)
         for node_name, fn in nodes:
-            graph.add_node(node_name, fn)
+            # StateGraph(dict) has no per-key channels to merge on, so
+            # LangGraph treats whatever a node returns as the ENTIRE new
+            # state, silently dropping keys (like "db" and "org_id") that the
+            # node didn't re-emit. Wrap every node so it always returns the
+            # full state (incoming state merged with its own partial update),
+            # matching SequentialPipeline's in-place `state.update()` behavior.
+            def make_wrapped(node_fn: NodeFn) -> NodeFn:
+                async def wrapped(state: dict) -> dict:
+                    update = await node_fn(state)
+                    return {**state, **(update or {})}
+
+                return wrapped
+
+            graph.add_node(node_name, make_wrapped(fn))
         node_names = [n for n, _ in nodes]
         graph.set_entry_point(node_names[0])
         for current, nxt in zip(node_names, node_names[1:]):

@@ -4,12 +4,21 @@ Loaded once via pydantic-settings; every module imports `settings` from here.
 """
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# .env normally lives at the repo root (docker-compose reads it from there and
+# injects real env vars into containers, where this list is irrelevant).
+# Local, non-Docker runs are commonly launched from backend/ (as the README's
+# `cd backend && uvicorn ...` does), where a bare "./.env" would never be
+# found. Listing both the repo root and backend/ makes either cwd work.
+_BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
+_ENV_FILES = (str(_BACKEND_DIR.parent / ".env"), str(_BACKEND_DIR / ".env"))
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_ENV_FILES, extra="ignore")
 
     app_name: str = "NEXUS Intelligence"
     environment: str = "development"  # development|staging|production

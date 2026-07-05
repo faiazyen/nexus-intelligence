@@ -238,6 +238,37 @@ class ICPRequest(BaseModel):
     offer_description: str = ""
 
 
+def _serialize_icp(icp: ICPProfile) -> dict:
+    return {
+        "id": str(icp.id),
+        "target_industries": icp.target_industries,
+        "company_size_min": icp.company_size_min,
+        "company_size_max": icp.company_size_max,
+        "titles_targeted": icp.titles_targeted,
+        "geographies": icp.geographies,
+        "tech_stack_keywords": icp.tech_stack_keywords,
+        "offer_description": icp.offer_description,
+    }
+
+
+@router.get("/icp")
+async def get_icp(
+    org: Organization = Depends(get_current_org),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """The organization's current ICP profile, or contract defaults if unset."""
+    existing = (
+        await db.execute(
+            select(ICPProfile)
+            .where(ICPProfile.org_id == org.id)
+            .order_by(ICPProfile.created_at.desc())
+        )
+    ).scalars().first()
+    if existing is None:
+        return _serialize_icp(ICPProfile(id=uuid.uuid4(), org_id=org.id))
+    return _serialize_icp(existing)
+
+
 @router.put("/icp")
 async def upsert_icp(
     payload: ICPRequest,
@@ -265,7 +296,8 @@ async def upsert_icp(
     existing.tech_stack_keywords = payload.tech_stack_keywords
     existing.offer_description = payload.offer_description
     await db.commit()
-    return {"id": str(existing.id), "status": "saved"}
+    await db.refresh(existing)
+    return _serialize_icp(existing)
 
 
 @router.post("/pipeline/run")

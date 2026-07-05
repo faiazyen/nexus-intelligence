@@ -33,6 +33,8 @@ import {
 import {
   mapAccountProfileResponse,
   mapBriefingResponse,
+  mapICPFromWire,
+  mapICPToWire,
   mapOutreachResponse,
   mapPipelineResponse,
   mapQueueResponse,
@@ -43,7 +45,12 @@ import {
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8000";
 
-const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+// No auth/org-selection UI exists yet, so no real org id is available on the
+// client. Omitting X-Org-Id lets the backend's own get_current_org dependency
+// fall back to the seeded demo org (see backend/app/routers/deps.py) — the
+// same fallback the SSE stream already relies on implicitly, since
+// EventSource cannot set custom request headers at all. Sending a made-up
+// placeholder UUID here would only cause a 404 on every live request.
 const FETCH_TIMEOUT_MS = 5000;
 
 class ApiUnavailableError extends Error {}
@@ -57,7 +64,6 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
       signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
-        "X-Org-Id": DEFAULT_ORG_ID,
         ...(init?.headers ?? {}),
       },
     });
@@ -122,6 +128,7 @@ interface AccountProfileResponse {
   account: Account;
   signals: Signal[];
   entry?: ActionQueueEntry;
+  outreachDraft?: OutreachDraft;
 }
 
 async function fetchAccount(id: string): Promise<AccountProfileResponse> {
@@ -142,7 +149,18 @@ function demoAccountProfile(id: string): AccountProfileResponse {
 export function useAccountProfile(id: string) {
   return useQuery({
     queryKey: queryKeys.account(id),
-    queryFn: () => withFallback(() => fetchAccount(id), demoAccountProfile(id)),
+    // demoAccountProfile() throws for any id outside the hardcoded demo
+    // fixtures (e.g. every real, live-scored account). withFallback's plain
+    // `fallback: T` parameter is evaluated eagerly as an argument, so calling
+    // it inline here would throw before the live request ever runs, exactly
+    // like the same bug already fixed in useGenerateOutreach above.
+    queryFn: async () => {
+      try {
+        return await fetchAccount(id);
+      } catch {
+        return demoAccountProfile(id);
+      }
+    },
     enabled: Boolean(id),
   });
 }
@@ -166,8 +184,19 @@ async function generateOutreach(accountId: string): Promise<OutreachDraft> {
 export function useGenerateOutreach() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (accountId: string) =>
-      withFallback(() => generateOutreach(accountId), buildDemoOutreach(accountId)),
+    // buildDemoOutreach() throws for any accountId outside the hardcoded demo
+    // fixtures (e.g. every real, live-scored account). withFallback's plain
+    // `fallback: T` parameter is evaluated eagerly as an argument, so calling
+    // it inline here would throw before the live request ever runs. Sequence
+    // the two attempts explicitly instead: try live, then the demo fixture,
+    // and only fail if both are impossible (real account, backend down).
+    mutationFn: async (accountId: string) => {
+      try {
+        return await generateOutreach(accountId);
+      } catch {
+        return buildDemoOutreach(accountId);
+      }
+    },
     onSuccess: (_data, accountId) => {
       client.invalidateQueries({ queryKey: queryKeys.account(accountId) });
     },
@@ -179,7 +208,8 @@ export function useGenerateOutreach() {
 // ---------------------------------------------------------------------------
 
 async function fetchICP(): Promise<ICPProfile> {
-  return apiFetch<ICPProfile>("/api/v1/intent/icp");
+  const raw = await apiFetch<Record<string, unknown>>("/api/v1/intent/icp");
+  return mapICPFromWire(raw);
 }
 
 export function useICPProfile() {
@@ -190,10 +220,11 @@ export function useICPProfile() {
 }
 
 async function putICP(profile: ICPProfile): Promise<ICPProfile> {
-  return apiFetch<ICPProfile>("/api/v1/intent/icp", {
+  const raw = await apiFetch<Record<string, unknown>>("/api/v1/intent/icp", {
     method: "PUT",
-    body: JSON.stringify(profile),
+    body: JSON.stringify(mapICPToWire(profile)),
   });
+  return mapICPFromWire(raw);
 }
 
 export function useUpdateICP() {
@@ -372,7 +403,7 @@ export async function askBrain({ question, onToken, onDone }: AskBrainOptions): 
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     const res = await fetch(`${API_BASE}/api/v1/brain/ask`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Org-Id": DEFAULT_ORG_ID },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question }),
       signal: controller.signal,
     });
@@ -382,6 +413,15 @@ export async function askBrain({ question, onToken, onDone }: AskBrainOptions): 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    // Per the SSE spec, one logical event can span multiple consecutive
+    // "data:" lines, whose values are joined by "\n"; the event ends at
+    // the blank line. The backend relies on this (see brain.py's
+    // encode_sse_event) to send chunks that contain embedded newlines
+    // (e.g. markdown section breaks in demo-mode fallback text) without
+    // corrupting them — a naive per-line parser would see the
+    // continuation after an embedded newline as a line with no "data:"
+    // prefix and silently drop it, eating whole words.
+    let eventLines: string[] = [];
     // eslint-disable-next-line no-constant-condition
     while (true) {
       const { done, value } = await reader.read();
@@ -390,8 +430,15 @@ export async function askBrain({ question, onToken, onDone }: AskBrainOptions): 
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
       for (const line of lines) {
-        const trimmed = line.replace(/^data:\s?/, "").trim();
-        if (trimmed && trimmed !== "[DONE]") onToken(trimmed);
+        if (line.startsWith("data:")) {
+          eventLines.push(line.replace(/^data: ?/, ""));
+          continue;
+        }
+        if (line === "" && eventLines.length > 0) {
+          const payload = eventLines.join("\n");
+          eventLines = [];
+          if (payload && payload !== "[DONE]") onToken(payload);
+        }
       }
     }
     onDone();
