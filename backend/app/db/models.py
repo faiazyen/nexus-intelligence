@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, timezone
+from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -82,7 +83,7 @@ class BusinessContextDoc(Base):
     doc_type: Mapped[str] = mapped_column(String(64), default="general")  # proposal|case_study|pricing|win_loss|general
     title: Mapped[str] = mapped_column(String(255), default="")
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding_id: Mapped[str | None] = mapped_column(String(128), nullable=True)  # Qdrant point id
+    embedding_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)  # Qdrant point id
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -98,7 +99,7 @@ class Account(Base):
     revenue_estimate: Mapped[int] = mapped_column(Integer, default=0)  # USD
     geography: Mapped[str] = mapped_column(String(128), default="")
     tech_stack: Mapped[dict] = mapped_column(JSONB, default=dict)
-    last_enriched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_enriched_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     signals: Mapped[list["Signal"]] = relationship(back_populates="account")
@@ -114,13 +115,13 @@ class Signal(Base):
     source: Mapped[str] = mapped_column(String(128), default="")  # linkedin_jobs|sec_edgar|sam_gov|newsapi|crunchbase|manual
     title: Mapped[str] = mapped_column(String(512), default="")
     raw_data: Mapped[dict] = mapped_column(JSONB, default=dict)
-    urgency_tier: Mapped[str | None] = mapped_column(String(8), nullable=True)  # HOT|WARM|COOL
-    budget_implication: Mapped[str | None] = mapped_column(String(16), nullable=True)  # CONFIRMED|PROBABLE|POSSIBLE|NONE
+    urgency_tier: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)  # HOT|WARM|COOL
+    budget_implication: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)  # CONFIRMED|PROBABLE|POSSIBLE|NONE
     decision_maker_involved: Mapped[bool] = mapped_column(Boolean, default=False)
-    days_to_action_window: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    days_to_action_window: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     summary: Mapped[str] = mapped_column(Text, default="")
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="new")  # new|classified|scored|archived
 
     account: Mapped[Account] = relationship(back_populates="signals")
@@ -168,9 +169,9 @@ class OutreachDraft(Base):
     call_script: Mapped[str] = mapped_column(Text, default="")
     positioning_frame: Mapped[str] = mapped_column(Text, default="")
     signal_reference: Mapped[str] = mapped_column(Text, default="")
-    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    reply_received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)  # replied|meeting_booked|no_response|bounced
+    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    reply_received_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    outcome: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)  # replied|meeting_booked|no_response|bounced
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     account: Mapped[Account] = relationship()
