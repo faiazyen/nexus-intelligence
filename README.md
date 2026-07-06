@@ -83,6 +83,8 @@ assumption to build a pricing page on.
 
 ## Docs
 
+- [Handoff](docs/HANDOFF.md) — current state, what's running, what's next (read this first)
+- [Product audit & MVP plan](docs/PRODUCT_AUDIT_AND_MVP.md) — the actual next steps
 - [Build contract](docs/CONTRACT.md) — canonical schema, API surface, conventions
 - [Master product document](docs/MASTER_PRODUCT_DOCUMENT.md) — full product bible
 - [Architecture](docs/architecture.md) · [API reference](docs/api-reference.md)
