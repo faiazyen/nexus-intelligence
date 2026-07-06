@@ -1,9 +1,61 @@
 # NEXUS Intelligence — Handoff
 
-**Session end:** 2026-07-06
+**Session end:** 2026-07-06 (deploy session)
 **Repo:** `faiazyen/nexus-intelligence` (private) — single branch, `main`. No feature
 branches exist; every commit this session went straight to `main` and is pushed.
 Nothing pending to commit or merge.
+
+## Deploy session (2026-07-06, second entry same day)
+
+Frontend is live: **https://nexus-intelligence-murex.vercel.app** (Vercel project
+`nexus-intelligence`, team `faiazyens-projects`). Manual `vercel deploy --prod`
+from `frontend/` — no GitHub auto-deploy wired up yet, so future pushes to `main`
+won't redeploy it automatically.
+
+Backend is NOT deployed yet — `render.yaml` is committed (`9cc3ea0`) as a Render
+Blueprint (web service + free Postgres, runs `alembic upgrade head` before
+uvicorn) but nobody has connected the GitHub repo to a Render account and clicked
+"Apply" yet. That's the very next step.
+
+Also in `9cc3ea0`: `backend/app/core/config.py` now normalizes a bare
+`postgresql://` URL to `postgresql+asyncpg://` — Render's (and most managed
+Postgres providers') connection string doesn't include the driver, and the
+async SQLAlchemy engine requires it. Verified with the local `.venv` and the
+full test suite (71 passed, 3 skipped) — no regressions.
+
+**QA on the live frontend (demo mode, no backend yet):**
+- Marketing site and dashboard render clean, no console errors, "DEMO STREAM"
+  badge correctly signals mock data on Command Center.
+- Confirmed real interaction (asked Business Brain "who should I call today?")
+  correctly attempts `http://localhost:8001/api/v1/brain/briefing` — this is
+  expected: `NEXT_PUBLIC_API_URL` is currently set to the old localhost value
+  as a placeholder (Next.js inlines `NEXT_PUBLIC_*` at build time, so this
+  needs a rebuild once the backend URL exists, not just an env var change).
+- One transient 503 on an account-detail RSC prefetch (`acc_hartwell_industrial`)
+  during a burst of simultaneous nav-link prefetches — reproduced once, not on
+  direct navigation to the same URL afterward. Likely a serverless cold-start
+  blip, not a code bug. Worth a second look if it recurs under real traffic.
+- **Did not verify Vercel Deployment Protection (password gate)** — the CLI has
+  no flag for it and the linked account may be on the Hobby plan, where it's
+  Pro-only. The app has zero server-side auth (per the existing audit), so
+  until either Deployment Protection or real auth exists, anyone with the URL
+  can hit it. Mitigations already in place: `$0.25/day` hard LLM spend cap,
+  and no `OPENROUTER_API_KEY` has been added to Vercel by this session — only
+  add it once you've checked Deployment Protection availability on the
+  Vercel dashboard (Project Settings → Deployment Protection).
+
+**To finish the deploy (next session or right now):**
+1. Go to Render → New → Blueprint → connect `faiazyen/nexus-intelligence` →
+   it'll read `render.yaml` and provision the DB + web service. Set
+   `OPENROUTER_API_KEY` / `APOLLO_API_KEY` / `CORS_ORIGINS` (to the Vercel URL
+   above) in the Render dashboard — they're marked `sync: false` in the
+   blueprint so Render will prompt for them instead of committing secrets.
+2. Copy the Render backend URL, then:
+   `cd frontend && vercel env rm NEXT_PUBLIC_API_URL production` (confirm),
+   then `vercel env add NEXT_PUBLIC_API_URL production --value <render-url> --yes`,
+   then `vercel deploy --prod --yes` to rebuild with the real URL baked in.
+3. Re-run the Business Brain click-through test to confirm the API call
+   succeeds against the live backend instead of localhost.
 
 ## What's live on `main` right now
 
