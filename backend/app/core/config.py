@@ -6,6 +6,7 @@ Loaded once via pydantic-settings; every module imports `settings` from here.
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # .env normally lives at the repo root (docker-compose reads it from there and
@@ -25,6 +26,16 @@ class Settings(BaseSettings):
     debug: bool = True
 
     database_url: str = "postgresql+asyncpg://nexus:nexus@localhost:5432/nexus"
+
+    @field_validator("database_url")
+    @classmethod
+    def _use_asyncpg_driver(cls, v: str) -> str:
+        # Managed Postgres providers (Render, Supabase, etc.) hand back a bare
+        # postgresql:// URL; SQLAlchemy's async engine requires the asyncpg
+        # driver to be named explicitly.
+        if v.startswith("postgresql://"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
     # Redis was dropped along with the old direct-Anthropic cost tracker it
     # backed (see app/core/llm_router.py's file-based CostTracker instead).
     qdrant_url: str = "http://localhost:6333"
